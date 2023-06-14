@@ -6,6 +6,9 @@ pipeline {
  IMAGE_REPO_NAME="jenkins-pipeline-build-demo"
  IMAGE_TAG="latest"
  REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
+ CLUSTER_NAME = "ecs-cluster"
+ TASKDEF_NAME = "ecs_terraform_task_def"
+ SERVICE_NAME = "ecs_terraform_service"
  }
  
  stages {
@@ -44,5 +47,19 @@ checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs:
  }
  }
  }
+  
+  stage('deploy to ecs') {
+  steps{
+  script {
+  sh "sudo apt-get install jq -y"
+  sh "jq --version"
+  sh "aws ecs describe-task-definition --task-definition ${ TASKDEF_NAME } > task-def.json"
+  sh "jq .taskDefinition task-def.json > taskdefinition.json"
+  sh "jq 'del(.taskDefinitionArn)' taskdefinition.json | jq 'del(.revision)' | jq 'del(.status)' | jq 'del(.requiresAttributes)' | jq 'del(.compatibilities)' | jq 'del(.registeredAt)'| jq 'del(.registeredBy)' > container-definition.json"
+  sh "aws ecs register-task-definition --cli-input-json file://container-definition.json"  
+  sh "aws ecs update-service --cluster  ${ CLUSTER_NAME } --service  ${ SERVICE_NAME } --task-definition  ${ TASKDEF_NAME }"
+    }
+   }
+  } 
  }
 }
