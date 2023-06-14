@@ -2,7 +2,7 @@ FROM node as build1
 
 WORKDIR /react-app
 
-COPY /react-app .
+COPY . .
 
 RUN npm i
 RUN npm install react-icons
