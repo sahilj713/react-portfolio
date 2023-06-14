@@ -51,8 +51,6 @@ checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs:
   stage('deploy to ecs') {
   steps{
   script {
-//   sh "sudo apt-get install jq -y"
-//   sh "jq --version"
   sh "aws ecs describe-task-definition --task-definition ${ TASKDEF_NAME } > task-def.json"
   sh "jq .taskDefinition task-def.json > taskdefinition.json"
   sh "jq 'del(.taskDefinitionArn)' taskdefinition.json | jq 'del(.revision)' | jq 'del(.status)' | jq 'del(.requiresAttributes)' | jq 'del(.compatibilities)' | jq 'del(.registeredAt)'| jq 'del(.registeredBy)' > container-definition.json"

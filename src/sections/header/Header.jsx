@@ -11,7 +11,7 @@ const Header = () => {
           <img src= {HeaderImage} alt= "Header Portrait"/>
         </div>
         <h3>Sahil Jain</h3>
-        <p>Welcome to my career portfolio! I hope that this portfolio provides insight into my character,work experience,projects,technical skills and accomplishments 
+        <p>Welcome Fellas to my career portfolio! I hope that this portfolio provides insight into my character,work experience,projects,technical skills and accomplishments 
           </p>
           <div className="header__cta">
             <a href = '#contact' className='btn primary'>Let's Talk</a>
