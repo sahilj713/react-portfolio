@@ -1,15 +1,13 @@
 name: react-portfolio-cd
 
 on:
-  # workflow_dispatch:
-  #   inputs:
-  #     Image_tag:
-  #       description: 'Image_tag'
-  #       required: true
-  #       type: string
-  push:
-    branches:
-      - ci-cd
+  workflow_dispatch:
+    inputs:
+      Image_tag:
+        description: 'Image_tag'
+        required: true
+        type: string
+  
 
           
   
@@ -38,37 +36,37 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-      # - name: Image repo and tag
-      #   env:
-      #     ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      #   run: |
+      - name: Image repo and tag
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
             
-      #       ECR_REPO=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ inputs.Image_tag }}
+            ECR_REPO=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ inputs.Image_tag }}
   
-      #       # Set the command output as an environment variable
-      #       echo "IMGN=$ECR_REPO" >> $GITHUB_ENV 
-      # - name: CD
-      #   env:
-      #     ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      #   run:  |
-      #            aws ecs describe-task-definition --task-definition $TASKDEF_NAME > task-def.json
-      #            jq .taskDefinition task-def.json > taskdefinition.json
-      #            jq 'del(.taskDefinitionArn)' taskdefinition.json | jq 'del(.revision)' | jq 'del(.status)' | jq 'del(.requiresAttributes)' | jq 'del(.compatibilities)' | jq 'del(.registeredAt)'| jq 'del(.registeredBy)' > container-definition.json
-      #            jq '.containerDefinitions[0].image = "${{ env.IMGN }}"' container-definition.json > temp-taskdef.json
-      #            ls
-      #            cat temp-taskdef.json
-      #            aws ecs register-task-definition --cli-input-json file://temp-taskdef.json
-      #            aws ecs update-service --cluster  $CLUSTER_NAME --service  $SERVICE_NAME --task-definition  $TASKDEF_NAME
+            # Set the command output as an environment variable
+            echo "IMGN=$ECR_REPO" >> $GITHUB_ENV 
+      - name: CD
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run:  |
+                 aws ecs describe-task-definition --task-definition $TASKDEF_NAME > task-def.json
+                 jq .taskDefinition task-def.json > taskdefinition.json
+                 jq 'del(.taskDefinitionArn)' taskdefinition.json | jq 'del(.revision)' | jq 'del(.status)' | jq 'del(.requiresAttributes)' | jq 'del(.compatibilities)' | jq 'del(.registeredAt)'| jq 'del(.registeredBy)' > container-definition.json
+                 jq '.containerDefinitions[0].image = "${{ env.IMGN }}"' container-definition.json > temp-taskdef.json
+                 ls
+                 cat temp-taskdef.json
+                 aws ecs register-task-definition --cli-input-json file://temp-taskdef.json
+                 aws ecs update-service --cluster  $CLUSTER_NAME --service  $SERVICE_NAME --task-definition  $TASKDEF_NAME
                  
-      # - name: checking for status
-      #   run: |
-      #            while true
-      #            do
-      #              aws ecs describe-services --service $SERVICE_NAME --cluster $CLUSTER_NAME --region $AWS_DEFAULT_REGION > services.json
-      #              jq .services services.json > service.json
-      #              message=`jq .[0].events[0].message service.json`
-      #              if [ $message == '"(service $SERVICE_NAME) has reached a steady state."']; then
-      #                 break
-      #              fi
-      #            done  
+      - name: checking for status
+        run: |
+                 while true
+                 do
+                   aws ecs describe-services --service $SERVICE_NAME --cluster $CLUSTER_NAME --region $AWS_DEFAULT_REGION > services.json
+                   jq .services services.json > service.json
+                   message=`jq .[0].events[0].message service.json`
+                   if [ $message == '"(service $SERVICE_NAME) has reached a steady state."']; then
+                      break
+                   fi
+                 done  
                    
