@@ -65,6 +65,7 @@ jobs:
                    aws ecs describe-services --service $SERVICE_NAME --cluster $CLUSTER_NAME --region $AWS_DEFAULT_REGION > services.json
                    jq .services services.json > service.json
                    message=`jq .[0].events[0].message service.json`
+                   echo $message
                    if [[ $message == '"(service $SERVICE_NAME) has reached a steady state."' ]]; then
                       break
                    fi
