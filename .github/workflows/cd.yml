@@ -63,7 +63,7 @@ jobs:
                  sleep 30
                  while true
                  do
-                   sleep 5
+                   sleep 3
                    aws ecs describe-services --service $SERVICE_NAME --cluster $CLUSTER_NAME --region $AWS_DEFAULT_REGION > services.json
                    jq .services services.json > service.json
                    message=`jq .[0].events[0].message service.json`
