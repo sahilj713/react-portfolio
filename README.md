@@ -1,70 +1,166 @@
-# Getting Started with Create React App
+<h1 align="center"> CI/CD Workflow </h1> <br>
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Description
+<p>This repository contains the configuration for GitHub Actions CI/CD workflows. It automates the build, test, and deployment processes.</p>
 
-## Available Scripts
+## Workflow Overview
 
-In the project directory, you can run:
+There are three workflows:
 
-### `npm start`
+- CI.yml -
+This workflow is triggered on every push to the dev branch. The workflow runs the test suite to ensure the code is functioning correctly. If the code passes all tests then a docker image is build with a proper image tag consisting of two tags which are 'latest' and of the format 'environment_name-commit_id' (ex: dev-dcd3a033) and then finally this image is pushed to the AWS ECR(Elastic Container Repository).
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- CD.yml -
+This file contains the workflow configuration for deployment.A manual action is required to trigger this workflow. We need to provide the 'Image_tag' input for its successful execution whose default value is 'latest'. Once this workflow is manually triggered by providing the input 'Image_tag' it is then deployed to the  AWS ECS(Elastic Container Service) for a specific environment.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- PR.yml -
+This workflow is triggered on every pull requests to the dev branch. The workflow runs the test suite to ensure the code is functioning correctly.
 
-### `npm test`
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Usage
 
-### `npm run build`
+Provide instructions on how to use the CI/CD workflows. Include any prerequisites and setup steps. For example:
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- Make sure you have access to the repository and appropriate permissions to trigger GitHub Actions workflows.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- Push changes to the main branch or create pull requests. The workflow will automatically start.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- A manual action is required to trigger the deployment workflow. We need to provide the 'Image_tag' input for its successful execution whose default value is 'latest'  
 
-### `npm run eject`
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## workflow configuration
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### CI.yml
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+This workflow is triggered on every push to the dev branch.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+The various steps involved in this workflow are :
+- Cache Maven dependencies -
+Caching is a good fit for saving and reusing files that don’t change too often such as third-party dependencies. It cache your package manager dependencies in your GitHub Actions rather than download fresh packages for every workflow you run.
 
-## Learn More
+    ```hcl
+    - name: Cache Maven dependencies
+          uses: actions/cache@v2
+          with:
+            path: ~/.m2/repository  # Location where Maven stores its dependencies
+            key: ${{ runner.os }}-maven-${{ hashFiles('**/*.xml') }}
+            restore-keys: |
+                ${{ runner.os }}-maven-    
+    ```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- Install maven dependencies -
+This steps basically install the dependencies and runs the test suite to ensure the code is functioning correctly.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- configure AWS Creds -
+This step is for configuration of AWS which requires credentials like 'aws-access-key-id' and 'aws-secret-access-key' whose secret values are stored in the github repository secrets.
 
-### Code Splitting
+    ```hcl
+    - name: Configure AWS Creds
+          uses: aws-actions/configure-aws-credentials@v1
+          with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: ${{ env.AWS_DEFAULT_REGION }}
+    ```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+- Login to Amazon ECR -
+This step is to login into the AWS ECR so that the image can be pushed to the ECR repository.
 
-### Analyzing the Bundle Size
+- Build, tag, and push image to Amazon ECR -
+This step builds a docker image with a proper image tag consisting of two tags which are 'latest' and of the format 'environment_name-commit_id' (ex: dev-dcd3a033) and then finally this image is pushed to the AWS ECR(Elastic Container Repository)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+    ```hcl
+    - name: Build, tag, and push image to Amazon ECR
+          env:
+            ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+            IMAGE_TAG: dev-$(echo ${{ github.sha }} | cut -c 1-8)
+          run: |
+            docker build -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} -t $ECR_REGISTRY/${{ 
+            env.ECR_REPOSITORY }}:latest -f Dockerfile.ECS .
+            # docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            docker push --all-tags $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}
+            echo ${{ env.IMAGE_TAG }}
+    ```
 
-### Making a Progressive Web App
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+### CD.yml
 
-### Advanced Configuration
+This file contains the workflow configuration for deployment.A manual action is required to trigger this workflow.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+```hcl
+on:
+  workflow_dispatch:
+    inputs:
+      Image_tag:
+        description: 'Image_tag'
+        required: true
+        default: 'latest'
+        type: string
+```
+We need to provide the 'Image_tag' input for its successful execution whose default value is 'latest'. Once this workflow is manually triggered by providing the input 'Image_tag' it is then deployed to the  AWS ECS(Elastic Container Service) for a specific environment.
 
-### Deployment
+In this we have provided different envs like 'CLUSTER_NAME' , 'TASKDEF_NAME' , 'SERVICE_NAME' , 'AWS_DEFAULT_REGION' , 'ECR_REPOSITORY' , 'CONTAINER_NAME' which are used for the deployment of the service in the ECS.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+The various steps involved in this workflow are :
 
-### `npm run build` fails to minify
+- configure AWS Creds -
+This step is for configuration of AWS which requires credentials like 'aws-access-key-id' and 'aws-secret-access-key' whose secret values are stored in the github repository secrets.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Login to Amazon ECR -
+This step is to login into the AWS ECR so that the image can be pushed to the ECR repository.
+
+- Download task definition -
+This step basically downloads the task definition of the service so that we can update the revision number and image id for every new deployment of the service.
+
+    ```hcl
+    - name: Download task definition
+        run: |
+            aws ecs describe-task-definition --task-definition $TASKDEF_NAME > task-def.json
+            jq .taskDefinition task-def.json > taskdefinition.json
+            jq 'del(.taskDefinitionArn)' taskdefinition.json | jq 'del(.revision)' | jq 'del(.status)' | jq 'del(.requiresAttributes)' | jq 'del(.compatibilities)' | jq 'del(.registeredAt)'| jq 'del(.registeredBy)' > container-definition.json
+    ```
+
+- Fill in the new image ID in the Amazon ECS task definition -
+This step involves an AWS action which updates the image id with the latest value provided by the input 'Image_tag'
+
+    ```hcl
+    - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: container-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.image }}
+    ```
+
+- Deploy Amazon ECS task definition -
+This step involves an AWS action which will deploy the service in the ECS using the envs values specified in the workflow.
+Also this step makes sure that the workflow will get completed successfully only when the deployed service has reached a steady state and wait for the service stability for 5 minutes. If within 5 minutes the service has not reached the steady state then the workflow will get fail.
+
+    ```hcl
+    - name: Deploy Amazon ECS task definition
+            uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+            with:
+              task-definition: ${{ steps.task-def.outputs.task-definition }}
+              service: ${{ env.SERVICE_NAME }}
+              cluster: ${{ env.CLUSTER_NAME }}
+              wait-for-service-stability: true
+              wait-for-minutes: 5
+    ```
+
+
+### PR.yml
+
+This workflow is triggered on every pull requests to the dev branch. The workflow runs the test suite to ensure the code is functioning correctly.
+
+The workflow runs the test suite to ensure the code is functioning correctly and integrates it to the sonarqube which is a code quality assurance tool that performs in-depth code analysis and generates an analysis report to ensure code reliability
+
+```hcl
+- name: Install maven dependencies
+      run: |  
+          mvn clean install
+          mvn wrapper:wrapper
+    - name: Sonar Scan
+      run: |
+         sudo mvn clean org.sonarsource.scanner.maven:sonar-maven-plugin:3.9.0.2155:sonar -Dsonar.projectKey=presto-order-service -Dsonar.projectName=presto-order-service -Dsonar.sources=. -Dsonar.java.binaries=target/sonar/* -Dsonar.exclusions=src/test/**/*  -Dsonar.host.url=https://sonarscan.seguesolutions.org -Dsonar.login=.............................
+```
