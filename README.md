@@ -7,13 +7,13 @@
 
 There are three workflows:
 
-- CI.yml 
+- CI.yml -
 This workflow is triggered on every push to the dev branch. The workflow runs the test suite to ensure the code is functioning correctly. If the code passes all tests then a docker image is build with a proper image tag consisting of two tags which are 'latest' and of the format 'environment_name-commit_id' (ex: dev-dcd3a033) and then finally this image is pushed to the AWS ECR(Elastic Container Repository).
 
-- CD.yml
+- CD.yml -
 This file contains the workflow configuration for deployment.A manual action is required to trigger this workflow. We need to provide the 'Image_tag' input for its successful execution whose default value is 'latest'. Once this workflow is manually triggered by providing the input 'Image_tag' it is then deployed to the  AWS ECS(Elastic Container Service) for a specific environment.
 
-- PR.yml
+- PR.yml -
 This workflow is triggered on every pull requests to the dev branch. The workflow runs the test suite to ensure the code is functioning correctly.
 
 
@@ -30,28 +30,60 @@ Provide instructions on how to use the CI/CD workflows. Include any prerequisite
 
 ## workflow configuration
 
-# CI.yml
+### CI.yml
 
 This workflow is triggered on every push to the dev branch.
 
 The various steps involved in this workflow are :
-- Cache Maven dependencies 
+- Cache Maven dependencies -
 Caching is a good fit for saving and reusing files that don’t change too often such as third-party dependencies. It cache your package manager dependencies in your GitHub Actions rather than download fresh packages for every workflow you run.
 
-- Install maven dependencies
+    ```hcl
+    - name: Cache Maven dependencies
+          uses: actions/cache@v2
+          with:
+            path: ~/.m2/repository  # Location where Maven stores its dependencies
+            key: ${{ runner.os }}-maven-${{ hashFiles('**/*.xml') }}
+            restore-keys: |
+                ${{ runner.os }}-maven-    
+    ```
+
+- Install maven dependencies -
 This steps basically install the dependencies and runs the test suite to ensure the code is functioning correctly.
 
-- configure AWS Creds
+- configure AWS Creds -
 This step is for configuration of AWS which requires credentials like 'aws-access-key-id' and 'aws-secret-access-key' whose secret values are stored in the github repository secrets.
 
-- Login to Amazon ECR
+    ```hcl
+    - name: Configure AWS Creds
+          uses: aws-actions/configure-aws-credentials@v1
+          with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: ${{ env.AWS_DEFAULT_REGION }}
+    ```
+
+- Login to Amazon ECR -
 This step is to login into the AWS ECR so that the image can be pushed to the ECR repository.
 
-- Build, tag, and push image to Amazon ECR
+- Build, tag, and push image to Amazon ECR -
 This step builds a docker image with a proper image tag consisting of two tags which are 'latest' and of the format 'environment_name-commit_id' (ex: dev-dcd3a033) and then finally this image is pushed to the AWS ECR(Elastic Container Repository)
 
+    ```hcl
+    - name: Build, tag, and push image to Amazon ECR
+          env:
+            ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+            IMAGE_TAG: dev-$(echo ${{ github.sha }} | cut -c 1-8)
+          run: |
+            docker build -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} -t $ECR_REGISTRY/${{ 
+            env.ECR_REPOSITORY }}:latest -f Dockerfile.ECS .
+            # docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            docker push --all-tags $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}
+            echo ${{ env.IMAGE_TAG }}
+    ```
 
-# CD.yml
+
+### CD.yml
 
 This file contains the workflow configuration for deployment.A manual action is required to trigger this workflow.
 
@@ -71,13 +103,13 @@ In this we have provided different envs like 'CLUSTER_NAME' , 'TASKDEF_NAME' , '
 
 The various steps involved in this workflow are :
 
-- configure AWS Creds
+- configure AWS Creds -
 This step is for configuration of AWS which requires credentials like 'aws-access-key-id' and 'aws-secret-access-key' whose secret values are stored in the github repository secrets.
 
-- Login to Amazon ECR
+- Login to Amazon ECR -
 This step is to login into the AWS ECR so that the image can be pushed to the ECR repository.
 
-- Download task definition
+- Download task definition -
 This step basically downloads the task definition of the service so that we can update the revision number and image id for every new deployment of the service.
 
     ```hcl
@@ -88,7 +120,7 @@ This step basically downloads the task definition of the service so that we can 
             jq 'del(.taskDefinitionArn)' taskdefinition.json | jq 'del(.revision)' | jq 'del(.status)' | jq 'del(.requiresAttributes)' | jq 'del(.compatibilities)' | jq 'del(.registeredAt)'| jq 'del(.registeredBy)' > container-definition.json
     ```
 
-- Fill in the new image ID in the Amazon ECS task definition
+- Fill in the new image ID in the Amazon ECS task definition -
 This step involves an AWS action which updates the image id with the latest value provided by the input 'Image_tag'
 
     ```hcl
@@ -101,7 +133,7 @@ This step involves an AWS action which updates the image id with the latest valu
           image: ${{ env.image }}
     ```
 
-- Deploy Amazon ECS task definition
+- Deploy Amazon ECS task definition -
 This step involves an AWS action which will deploy the service in the ECS using the envs values specified in the workflow.
 Also this step makes sure that the workflow will get completed successfully only when the deployed service has reached a steady state and wait for the service stability for 5 minutes. If within 5 minutes the service has not reached the steady state then the workflow will get fail.
 
@@ -117,7 +149,7 @@ Also this step makes sure that the workflow will get completed successfully only
     ```
 
 
-# PR.yml
+### PR.yml
 
 This workflow is triggered on every pull requests to the dev branch. The workflow runs the test suite to ensure the code is functioning correctly.
 
